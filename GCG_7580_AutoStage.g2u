@@ -1,0 +1,85 @@
+﻿Program.Sub.Preflight.Start
+Program.External.Include.Library("7100.lib")
+Program.Sub.Preflight.End
+
+Program.Sub.Main.Start
+F.Intrinsic.Control.Try
+'George Sandoval
+'6 June 2024
+'Shipping & Receiving > Transactions > Staging Shipments 
+'This script will auto stage additional lines based on the order lines staged in the staging shipments
+'The order lines staged will have an order line in the order lines user 5 field that is tied to it and we want to auto stage this line with this script
+'1 - Read the BDF to see the orders that were staged during this save
+'2 - Loop through each line and see if there is anything in that order line's user 5 field
+'3 - Use the user 5 field and see if this is a valid line on that order. Stage that line
+'4 - Use the 7100 library, Update Allocations, to stage the valid line
+
+V.Local.sFilter.Declare(String)
+V.Local.sSQL.Declare(String)
+V.Local.sUser5.Declare(String)
+V.Local.iCount.Declare(Long)
+'Hook 038431 Shipping & Receiving > Transactions > Staging Shipments post save hook
+F.Intrinsic.Control.If(V.Caller.Hook, =!, 38431)
+	'End the program if we have this on another hook for some reason.
+	F.Intrinsic.Control.End
+F.Intrinsic.Control.EndIf
+
+'ID = AUX001 
+'Name = GAB-BDF
+F.Intrinsic.BDF.Load("OrderLineStage", "AUX001", True)
+
+'Check if we even have any lines to begin with or if it's a bad order without lines
+F.Intrinsic.Control.If(V.DataTable.OrderLineStage.RowCount, =, 0)
+	F.Intrinsic.Control.End
+F.Intrinsic.Control.EndIf
+
+'If we do have lines, then check User Field 5 for each line to see which order line is tied to this so we can stage it as well.
+F.ODBC.Connection!con.OpenCompanyConnection
+F.Intrinsic.Control.For(V.Local.iCount, 0, V.DataTable.OrderLineStage.RowCount--, 1)
+	'Use view because the table has offset data sometimes.
+	F.Intrinsic.String.Build("Select rtrim(USER_5) as USER_5 from V_ORDER_LINES where ORDER_NO = '{0}' and RECORD_NO = '{1}'", V.DataTable.OrderLineStage(V.Local.iCount).ORDER!FieldValTrim, V.DataTable.OrderLineStage(V.Local.iCount).Line!FieldValTrim, V.Local.sSQL)
+	F.ODBC.Connection!con.ExecuteAndReturn(V.Local.sSQL, V.Local.sUser5)
+	'Have user 5. Now check if this is a valid line and might as well bring in data for the 7100 datatable. Don't technically need lot, heat, serial since this is a misc charge
+	F.Intrinsic.String.Build("Select top 1 'T' as Type, Substring(Part, 1, 17) as Part, Substring (Part, 18, 3) as Rev, Location as Loc, QTY_ORDERED as OrderQty, ORDER_NO as SO, RECORD_NO as SOLine, '' as Lot, rtrim(Bin)Bin, '' as Heat,  '' as Serial from V_ORDER_LINES where ORDER_NO = '{0}' and RECORD_NO = '{1}'", V.DataTable.OrderLineStage(V.Local.iCount).ORDER!FieldValTrim, v.Local.sUser5, V.Local.sSQL)
+	F.Data.DataTable.CreateFromSQL("dtOrderLineStage", "con", V.Local.sSQL)
+	
+	F.Intrinsic.Control.If(V.DataTable.dtOrderLineStage.RowCount, =, 0)
+		'Go next if this isn't a valid line entered on the User 5 Field
+		F.Data.DataTable.Close("dtOrderLineStage")
+		F.Intrinsic.Control.Next(V.Local.iCount)
+	F.Intrinsic.Control.EndIf
+	'If this is a valid line, add a row to the 7100 datatable with all of the info
+	f.Intrinsic.String.Build("Select Lot,Bin,Heat from Item_master where Part = '{0}' and Location = '{1}' and rtrim(Serial_Number) = '{2}-{3}'", V.DataTable.dtOrderLineStage(0).Part!FieldValTrim, V.DataTable.dtOrderLineStage(0).Loc!FieldValTrim, V.DataTable.OrderLineStage(V.Local.iCount).ORDER!FieldValTrim, V.DataTable.OrderLineStage(V.Local.iCount).Line!FieldValTrim, V.Local.sSQL)
+	F.Data.DataTable.Merge("dtOrderLineStage", "7100", True, 2)
+	F.Data.DataTable.Close("dtOrderLineStage")
+F.Intrinsic.Control.Next(V.Local.iCount)
+
+F.ODBC.Connection!con.Close
+'Should have all valid records in the 7100 datatable. Good to call the library at this point and end the program
+
+F.Intrinsic.Control.CallSub("7100Sync")
+F.Intrinsic.Control.End
+
+F.Intrinsic.Control.Catch
+F.Intrinsic.Control.CallSub("Error", "Subroutine", V.Ambient.CurrentSubroutine, "ErrorDesc", V.Ambient.ErrorDescription, "ErrorNo", V.Ambient.ErrorNumber)
+F.Intrinsic.Control.EndTry
+Program.Sub.Main.End
+
+Program.Sub.Error.Start
+F.Intrinsic.Control.Try
+V.Local.sError.Declare(String)
+
+F.Intrinsic.String.Build("Project: {0}{1}{1}Subroutine: {2}{1}Error Occurred {3} with description {4}{1}{1}GAB Version: {5}", V.Caller.ScriptFile, V.Ambient.Newline, V.Args.Subroutine, V.Args.ErrorNo, V.Args.ErrorDesc, V.Ambient.GABVersion, V.Local.sError)
+F.Intrinsic.UI.Msgbox(V.Local.sError, "Error")
+F.Intrinsic.Control.End
+
+F.Intrinsic.Control.Catch
+	F.Intrinsic.Control.End
+F.Intrinsic.Control.EndTry
+Program.Sub.Error.End
+
+Program.Sub.Comments.Start
+${$5$}$20.1.8649.24509$}$1
+${$6$}$gsandoval$}$20240607085537918$}$pxyipsmdqasyAY7lJ5+YqAibKN4I37/YXQ2byAA0xDFA0xo2EMwBQ6ckO/2DQBexWvkZ5akwQKj5acXGGAb9Qw==
+
+Program.Sub.Comments.End
