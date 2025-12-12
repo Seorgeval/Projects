@@ -1,0 +1,6 @@
+[submodule "Projects"]
+	path = Projects
+	url = https://github.com/Seorgeval/Projects.git
+[submodule "Projects-2"]
+	path = Projects-2
+	url = https://github.com/Seorgeval/Projects-2.git
