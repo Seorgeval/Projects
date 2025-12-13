@@ -1,6 +1,6 @@
-[submodule "Projects"]
-	path = Projects
-	url = https://github.com/Seorgeval/Projects.git
-[submodule "Projects-2"]
-	path = Projects-2
-	url = https://github.com/Seorgeval/Projects-2.git
+[submodule "GAB-Projects"]
+	path = GAB-Projects
+	url = https://github.com/Seorgeval/GAB-Projects.git
+[submodule "Python-Projects"]
+	path = Python-Projects
+	url = https://github.com/Seorgeval/Python-Projects.git
